@@ -5,7 +5,7 @@ import time
 
 class NNetwork:
 
-    def __init__(self, sizes, epochs=3, learning_rate=0.01):
+    def __init__(self, sizes, epochs=5, learning_rate=0.01):
         self.sizes = sizes
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -34,10 +34,17 @@ class NNetwork:
         exps = np.exp(x - x.max())
         return exps / np.sum(exps, axis=0) * (1 - exps / np.sum(exps, axis=0))
 
+    def ReLU(self, x):
+        return np.maximum(0,x)
+
+    def d_ReLU(self,x):
+        return 1 * (x > 0)
+
     def compute_loss(self, weights,pred_error, output):
-        loss = np.dot(weights.T, pred_error) * self.d_sigmoid(output)
+        loss = np.dot(weights.T, pred_error) * self.d_ReLU(output)
+        #loss = np.dot(weights.T, pred_error) * self.d_sigmoid(output)
         return loss
-    
+
     def compute_chain_derivate(self, y_pred, y_train, Y_layer):
         derivate = 2 * (y_pred - y_train) / y_pred.shape[0] * self.d_softmax(Y_layer)
         return derivate
@@ -68,7 +75,8 @@ class NNetwork:
 
         for j in range(1, layers):
             params[f'Y{j}'] = np.dot(params[f'W{j}'], params[f'A{j - 1}'])
-            params[f'A{j}'] = self.sigmoid(params[f'Y{j}'])
+            #params[f'A{j}'] = self.sigmoid(params[f'Y{j}'])
+            params[f'A{j}'] = self.ReLU(params[f'Y{j}'])
         
         return params[f'A{layers - 1}']
 
@@ -77,7 +85,7 @@ class NNetwork:
         params = self.params
         weights_changes = {}
         
-        error = self.compute_chain_derivate(output, y_train)
+        error = self.compute_chain_derivate(output, y_train, params[f'Y{layers}'])
         weights_changes[f'W{layers}'] = self.compute_weights_changes(error, params[f'A{layers - 1}'])
         
         layers = sorted(range(1,layers), reverse=True)
@@ -111,15 +119,15 @@ class NNetwork:
                 self.update_parameters(changes_to_w)
             
             accuracy = self.compute_accuracy(x_val, y_val)
-
-            print(f'Epoch: {epoch+1}, Time Spent: {time.time() - start_time:.2f}sec, Accuracy: {accuracy:.2f}%')
+            epoch_time = time.time() - start_time
+            print(f'Epoch: {epoch+1}, Time Spent: {epoch_time:.2f}sec, Accuracy: {accuracy:.2f}%')
     
 def main():
     X_train, y_train = load_data(r'Neural Network Base\data\mnist_train.csv')
     X_test, y_test = load_data(r'Neural Network Base\data\mnist_test.csv')
-    dnn = NNetwork(sizes=[784, 128, 10])
-    dnn.print_architechture()
-    dnn.train(X_train, y_train, X_test, y_test)
+    simple_net = NNetwork(sizes=[784, 128, 10])
+    simple_net.print_architechture()
+    simple_net.train(X_train, y_train, X_test, y_test)
 
 if __name__ == '__main__':
     main()
