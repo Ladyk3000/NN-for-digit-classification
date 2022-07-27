@@ -5,30 +5,51 @@ import time
 
 class NNetwork:
 
-    def __init__(self, sizes, epochs=10, l_rate=0.001):
+    def __init__(self, sizes, epochs=3, learning_rate=0.01):
         self.sizes = sizes
         self.epochs = epochs
-        self.l_rate = l_rate
+        self.learning_rate = learning_rate
         self.layers = len(sizes)
-        print(f'count of layers :{self.layers}')
         self.params = self.initialization()
-        #print(self.params)
     
-    def sigmoid(self, x, derivative=False):
-        if derivative:
-            return (np.exp(-x))/((np.exp(-x)+1)**2)
+    def print_architechture(self):
+        print(f'Count of layers : {self.layers}')
+        sizes = self.sizes
+        print(f'Layers: {sizes[0]}', end = ' ')
+        for i in range(1, len(sizes)):
+            print(f'-> {sizes[i]}', end = ' ')
+        print()
+
+    def sigmoid(self, x):
         return 1/(1 + np.exp(-x))
+
+    def d_sigmoid(self, x):
+        return (np.exp(-x))/((np.exp(-x)+1)**2)
     
-    def softmax(self, x, derivative=False):
+    def softmax(self, x):
         exps = np.exp(x - x.max())
-        if derivative:
-            return exps / np.sum(exps, axis=0) * (1 - exps / np.sum(exps, axis=0))
         return exps / np.sum(exps, axis=0)
     
+    def d_softmax(self, x):
+        exps = np.exp(x - x.max())
+        return exps / np.sum(exps, axis=0) * (1 - exps / np.sum(exps, axis=0))
+
+    def compute_loss(self, weights,pred_error, output):
+        loss = np.dot(weights.T, pred_error) * self.d_sigmoid(output)
+        return loss
+    
+    def compute_chain_derivate(self, y_pred, y_train, Y_layer):
+        derivate = 2 * (y_pred - y_train) / y_pred.shape[0] * self.d_softmax(Y_layer)
+        return derivate
+
+    def compute_weights_changes(self, A, B):
+        changes = np.outer(A, B)
+        return changes
+
     def initialization(self):
         layers = self.layers
-
         layers_size = []
+
         layers_size.append(self.sizes[0])
         for i in range(1,self.layers - 1):
             layers_size.append(self.sizes[i])
@@ -56,19 +77,19 @@ class NNetwork:
         params = self.params
         weights_changes = {}
         
-        error = 2 * (output - y_train) / output.shape[0] * self.softmax(params[f'Y{layers}'], derivative=True)
-        weights_changes[f'W{layers}'] = np.outer(error, params[f'A{layers - 1}'])
+        error = self.compute_chain_derivate(output, y_train)
+        weights_changes[f'W{layers}'] = self.compute_weights_changes(error, params[f'A{layers - 1}'])
         
         layers = sorted(range(1,layers), reverse=True)
         for j in layers:
-            error = np.dot(params[f'W{j + 1}'].T, error) * self.sigmoid(params[f'Y{j}'], derivative=True)
-            weights_changes[f'W{j}'] = np.outer(error, params[f'A{j - 1}'])
+            error = self.compute_loss(params[f'W{j + 1}'], error, params[f'Y{j}'])
+            weights_changes[f'W{j}'] = self.compute_weights_changes(error, params[f'A{j - 1}'])
             
         return weights_changes
 
-    def update_network_parameters(self, changes_to_w):
+    def update_parameters(self, changes_to_w):
         for key, value in changes_to_w.items():
-            self.params[key] -= self.l_rate * value
+            self.params[key] -= self.learning_rate * value
 
     def compute_accuracy(self, x_val, y_val):
         predictions = []
@@ -77,26 +98,27 @@ class NNetwork:
             output = self.forward_pass(x)
             pred = np.argmax(output)
             predictions.append(pred == np.argmax(y))
-        
-        return np.mean(predictions)
+       
+        accuracy = np.mean(predictions) * 100
+        return accuracy
 
     def train(self, x_train, y_train, x_val, y_val):
         start_time = time.time()
-        for iteration in range(self.epochs):
+        for epoch in range(self.epochs):
             for x,y in zip(x_train, y_train):
                 output = self.forward_pass(x)
                 changes_to_w = self.backward_pass(y, output)
-                self.update_network_parameters(changes_to_w)
+                self.update_parameters(changes_to_w)
             
             accuracy = self.compute_accuracy(x_val, y_val)
-            print('Epoch: {0}, Time Spent: {1:.2f}s, Accuracy: {2:.2f}%'.format(
-                iteration+1, time.time() - start_time, accuracy * 100
-            ))
 
+            print(f'Epoch: {epoch+1}, Time Spent: {time.time() - start_time:.2f}sec, Accuracy: {accuracy:.2f}%')
+    
 def main():
     X_train, y_train = load_data(r'Neural Network Base\data\mnist_train.csv')
     X_test, y_test = load_data(r'Neural Network Base\data\mnist_test.csv')
-    dnn = NNetwork(sizes=[784, 128, 64, 10])
+    dnn = NNetwork(sizes=[784, 128, 10])
+    dnn.print_architechture()
     dnn.train(X_train, y_train, X_test, y_test)
 
 if __name__ == '__main__':
